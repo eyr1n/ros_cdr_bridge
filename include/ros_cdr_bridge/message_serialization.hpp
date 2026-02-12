@@ -12,7 +12,7 @@ namespace ros_cdr_bridge {
 
 class MessageAllocator {
 public:
-  MessageAllocator(const std::string &type);
+  explicit MessageAllocator(const std::string &type);
   std::shared_ptr<void> allocate();
 
 private:
@@ -23,7 +23,7 @@ private:
 
 class MessageSerializer {
 public:
-  MessageSerializer(const std::string &type);
+  explicit MessageSerializer(const std::string &type);
   rmw_ret_t serialize(const std::shared_ptr<void> src,
                       rclcpp::SerializedMessage &dest);
 
@@ -34,7 +34,7 @@ private:
 
 class MessageDeserializer {
 public:
-  MessageDeserializer(const std::string &type);
+  explicit MessageDeserializer(const std::string &type);
   rmw_ret_t deserialize(const rclcpp::SerializedMessage &src,
                         std::shared_ptr<void> dest);
 

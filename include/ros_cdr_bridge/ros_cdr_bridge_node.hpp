@@ -10,7 +10,7 @@ namespace ros_cdr_bridge {
 
 class RosCdrBridgeNode : public rclcpp::Node {
 public:
-  RosCdrBridgeNode(const rclcpp::NodeOptions &options);
+  explicit RosCdrBridgeNode(const rclcpp::NodeOptions &options);
   ~RosCdrBridgeNode() override;
 
 private:

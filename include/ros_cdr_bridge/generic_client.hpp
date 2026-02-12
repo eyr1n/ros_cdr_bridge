@@ -14,12 +14,11 @@ namespace ros_cdr_bridge {
 
 class GenericClient : public rclcpp::ClientBase {
 public:
-  GenericClient(
+  explicit GenericClient(
       rclcpp::node_interfaces::NodeBaseInterface *node_base,
       rclcpp::node_interfaces::NodeGraphInterface::SharedPtr node_graph,
       const std::string &name, const std::string &type,
       rcl_client_options_t &options);
-  virtual ~GenericClient() {}
   std::shared_ptr<void> create_response() override;
   std::shared_ptr<rmw_request_id_t> create_request_header() override;
   void handle_response(std::shared_ptr<rmw_request_id_t> request_header,
