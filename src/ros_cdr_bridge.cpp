@@ -77,15 +77,18 @@ void RosCdrBridge::on_message(
                    [](std::monostate) {},
                    [this, hdl, &session](CreatePublisherRequest &&request) {
                      create_publisher(hdl, session, request.call_id,
-                                      request.name, request.type);
+                                      request.name, request.type,
+                                      request.qos_profile);
                    },
                    [this, hdl, &session](CreateSubscriptionRequest &&request) {
                      create_subscription(hdl, session, request.call_id,
-                                         request.name, request.type);
+                                         request.name, request.type,
+                                         request.qos_profile);
                    },
                    [this, hdl, &session](CreateServiceClientRequest &&request) {
                      create_service_client(hdl, session, request.call_id,
-                                           request.name, request.type);
+                                           request.name, request.type,
+                                           request.qos_profile);
                    },
                    [this, &session](DestroyRequest &&request) {
                      destroy_id(session, request.id);
@@ -133,16 +136,19 @@ void RosCdrBridge::on_message(
 void RosCdrBridge::create_publisher(websocketpp::connection_hdl hdl,
                                     Session &session, uint32_t call_id,
                                     const std::string &name,
-                                    const std::string &type) {
+                                    const std::string &type,
+                                    const rmw_qos_profile_t &qos_profile) {
   uint32_t id = session.next_id++;
   rclcpp::GenericPublisher::SharedPtr publisher;
   {
     std::lock_guard lock{mutex_};
-    size_t qos_depth = node_->get_parameter("qos_depth").as_int();
     rclcpp::PublisherOptions options;
     options.callback_group = callback_group_;
     publisher = node_->create_generic_publisher(
-        name, type, rclcpp::QoS{qos_depth}, options);
+        name, type,
+        rclcpp::QoS{rclcpp::QoSInitialization::from_rmw(qos_profile),
+                    qos_profile},
+        options);
   }
 
   session.entities.emplace(id, publisher);
@@ -157,16 +163,18 @@ void RosCdrBridge::create_publisher(websocketpp::connection_hdl hdl,
 void RosCdrBridge::create_subscription(websocketpp::connection_hdl hdl,
                                        Session &session, uint32_t call_id,
                                        const std::string &name,
-                                       const std::string &type) {
+                                       const std::string &type,
+                                       const rmw_qos_profile_t &qos_profile) {
   uint32_t id = session.next_id++;
   rclcpp::GenericSubscription::SharedPtr subscription;
   {
     std::lock_guard lock{mutex_};
-    size_t qos_depth = node_->get_parameter("qos_depth").as_int();
     rclcpp::SubscriptionOptions options;
     options.callback_group = callback_group_;
     subscription = node_->create_generic_subscription(
-        name, type, rclcpp::QoS{qos_depth},
+        name, type,
+        rclcpp::QoS{rclcpp::QoSInitialization::from_rmw(qos_profile),
+                    qos_profile},
         [this, hdl, id](std::shared_ptr<rclcpp::SerializedMessage> message) {
           const auto &rcl_msg = message->get_rcl_serialized_message();
           std::vector<uint8_t> payload(1 + sizeof(id) + rcl_msg.buffer_length);
@@ -191,12 +199,14 @@ void RosCdrBridge::create_subscription(websocketpp::connection_hdl hdl,
 void RosCdrBridge::create_service_client(websocketpp::connection_hdl hdl,
                                          Session &session, uint32_t call_id,
                                          const std::string &name,
-                                         const std::string &type) {
+                                         const std::string &type,
+                                         const rmw_qos_profile_t &qos_profile) {
   uint32_t id = session.next_id++;
   std::shared_ptr<GenericClient> client;
   {
     std::lock_guard lock{mutex_};
     auto options = rcl_client_get_default_options();
+    options.qos = qos_profile;
     client = std::make_shared<GenericClient>(
         node_->get_node_base_interface().get(),
         node_->get_node_graph_interface(), name, type, options);

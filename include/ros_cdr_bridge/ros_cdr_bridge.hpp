@@ -13,6 +13,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialized_message.hpp>
+#include <rmw/types.h>
 
 #include "ros_cdr_bridge/generic_client.hpp"
 
@@ -44,13 +45,16 @@ private:
 
   void create_publisher(websocketpp::connection_hdl hdl, Session &session,
                         uint32_t call_id, const std::string &name,
-                        const std::string &type);
+                        const std::string &type,
+                        const rmw_qos_profile_t &qos_profile);
   void create_subscription(websocketpp::connection_hdl hdl, Session &session,
                            uint32_t call_id, const std::string &name,
-                           const std::string &type);
+                           const std::string &type,
+                           const rmw_qos_profile_t &qos_profile);
   void create_service_client(websocketpp::connection_hdl hdl, Session &session,
                              uint32_t call_id, const std::string &name,
-                             const std::string &type);
+                             const std::string &type,
+                             const rmw_qos_profile_t &qos_profile);
   void destroy_id(Session &session, uint32_t id);
 
   void publish_message(const rclcpp::GenericPublisher::SharedPtr pub,

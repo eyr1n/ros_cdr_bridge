@@ -34,7 +34,15 @@ Client -> Server:
 ```
 
 ```json
+{"callId":3,"op":"create_subscription","name":"/chatter","type":"std_msgs/msg/String","qos":{"profile":"SENSOR_DATA","history":"KEEP_LAST","depth":10,"reliability":"RELIABLE","durability":"VOLATILE","deadline":{"sec":0,"nsec":0},"lifespan":{"sec":0,"nsec":0},"liveliness":"AUTOMATIC","livelinessLeaseDuration":{"sec":0,"nsec":0},"avoidRosNamespaceConventions":false}}
+```
+
+```json
 {"callId":2,"op":"create_service_client","name":"/add_two_ints","type":"example_interfaces/srv/AddTwoInts"}
+```
+
+```json
+{"callId":4,"op":"create_service_client","name":"/add_two_ints","type":"example_interfaces/srv/AddTwoInts","qos":{"profile":"SERVICES_DEFAULT","history":"KEEP_LAST","depth":10,"reliability":"RELIABLE","durability":"VOLATILE","deadline":{"sec":0,"nsec":0},"lifespan":{"sec":0,"nsec":0},"liveliness":"AUTOMATIC","livelinessLeaseDuration":{"sec":0,"nsec":0},"avoidRosNamespaceConventions":false}}
 ```
 
 ```json
@@ -59,6 +67,11 @@ Notes:
 - `id` is assigned by server per WebSocket session, starting from `0`.
 - `id` namespace is shared by publishers, subscriptions, and service clients.
 - `callId` is client-defined and echoed back in create responses.
+- `create_publisher` / `create_subscription` / `create_service_client` must include `qos`.
+- `qos.profile` supports: `SENSOR_DATA`, `PARAMETERS`, `DEFAULT`, `SERVICES_DEFAULT`, `PARAMETER_EVENTS`, `SYSTEM_DEFAULT`, `BEST_AVAILABLE`.
+- `qos.profile` is optional (default base profile is `rmw_qos_profile_default`).
+- `history` / `reliability` / `durability` / `liveliness` are UPPER_SNAKE_CASE string enums.
+- QoS time fields (`deadline`, `lifespan`, `livelinessLeaseDuration`) use `{ "sec": ..., "nsec": ... }`.
 - Unknown/invalid control messages are ignored (no explicit error frame).
 
 ### Binary frames (data)

@@ -23,6 +23,7 @@ target_include_directories(${PROJECT_NAME}_component PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 target_compile_features(${PROJECT_NAME}_component PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_definitions(${PROJECT_NAME}_component PRIVATE ASIO_STANDALONE)
 target_link_libraries(${PROJECT_NAME}_component
   websocketpp::websocketpp
   nlohmann_json::nlohmann_json
