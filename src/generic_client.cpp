@@ -132,7 +132,7 @@ void GenericClient::handle_response(
 
   std::function<void(const uint8_t *, size_t)> callback;
   {
-    std::lock_guard lock{mutex_};
+    std::lock_guard lock{callbacks_mutex_};
     auto it = callbacks_.find(request_header->sequence_number);
     if (it == callbacks_.end()) {
       return;
@@ -155,7 +155,7 @@ void GenericClient::async_send_request(
                                              "failed to deserialize request");
   }
 
-  std::lock_guard lock{mutex_};
+  std::lock_guard lock{callbacks_mutex_};
   int64_t sequence_number;
   ret =
       rcl_send_request(get_client_handle().get(), buf.get(), &sequence_number);

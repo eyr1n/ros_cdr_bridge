@@ -28,7 +28,7 @@ public:
                      std::function<void(const uint8_t *, size_t)> &&callback);
 
 private:
-  std::mutex mutex_;
+  std::mutex callbacks_mutex_;
   std::unordered_map<int64_t, std::function<void(const uint8_t *, size_t)>>
       callbacks_;
   std::shared_ptr<rcpputils::SharedLibrary> typesupport_lib_;

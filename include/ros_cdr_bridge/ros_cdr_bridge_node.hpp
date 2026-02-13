@@ -1,7 +1,5 @@
 #pragma once
 
-#include <thread>
-
 #include <rclcpp/rclcpp.hpp>
 
 #include "ros_cdr_bridge/ros_cdr_bridge.hpp"
@@ -15,7 +13,6 @@ public:
 
 private:
   RosCdrBridge bridge_;
-  std::thread thread_;
 };
 
 } // namespace ros_cdr_bridge

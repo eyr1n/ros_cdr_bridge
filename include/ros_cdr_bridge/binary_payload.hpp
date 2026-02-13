@@ -10,9 +10,9 @@
 
 namespace ros_cdr_bridge {
 
-inline constexpr uint8_t OP_TOPIC = 1;
-inline constexpr uint8_t OP_SERVICE_REQUEST = 2;
-inline constexpr uint8_t OP_SERVICE_RESPONSE = 3;
+inline constexpr uint8_t OP_TOPIC = 0;
+inline constexpr uint8_t OP_SERVICE_REQUEST = 1;
+inline constexpr uint8_t OP_SERVICE_RESPONSE = 2;
 
 struct PublisherMessage {
   uint32_t id;

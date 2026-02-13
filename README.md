@@ -17,77 +17,123 @@ ros2 run ros_cdr_bridge ros_cdr_bridge_node
 
 Parameters:
 - `port` (default: `9090`)
-- `qos_depth` (default: `10`)
 
 ## Protocol
 
-### Text frames (control)
+### Client -> Server
 
-Client -> Server:
+#### create publisher
 
-```json
-{"callId":0,"op":"create_subscription","name":"/chatter","type":"std_msgs/msg/String"}
+```ts
+{
+  op: "create_publisher";
+  call_id: number;
+  name: string;
+  type: string;
+  qos: QosProfile; // see QoS section
+}
 ```
 
-```json
-{"callId":1,"op":"create_publisher","name":"/chatter","type":"std_msgs/msg/String"}
+#### create subscription
+
+```ts
+{
+  op: "create_subscription";
+  call_id: number;
+  name: string;
+  type: string;
+  qos: QosProfile; // see QoS section
+}
 ```
 
-```json
-{"callId":3,"op":"create_subscription","name":"/chatter","type":"std_msgs/msg/String","qos":{"profile":"SENSOR_DATA","history":"KEEP_LAST","depth":10,"reliability":"RELIABLE","durability":"VOLATILE","deadline":{"sec":0,"nsec":0},"lifespan":{"sec":0,"nsec":0},"liveliness":"AUTOMATIC","livelinessLeaseDuration":{"sec":0,"nsec":0},"avoidRosNamespaceConventions":false}}
+#### create service client
+
+```ts
+{
+  op: "create_service_client";
+  call_id: number;
+  name: string;
+  type: string;
+  qos: QosProfile; // see QoS section
+}
 ```
 
-```json
-{"callId":2,"op":"create_service_client","name":"/add_two_ints","type":"example_interfaces/srv/AddTwoInts"}
+#### destroy
+
+```ts
+{
+  op: "destroy";
+  id: number;
+}
 ```
 
-```json
-{"callId":4,"op":"create_service_client","name":"/add_two_ints","type":"example_interfaces/srv/AddTwoInts","qos":{"profile":"SERVICES_DEFAULT","history":"KEEP_LAST","depth":10,"reliability":"RELIABLE","durability":"VOLATILE","deadline":{"sec":0,"nsec":0},"lifespan":{"sec":0,"nsec":0},"liveliness":"AUTOMATIC","livelinessLeaseDuration":{"sec":0,"nsec":0},"avoidRosNamespaceConventions":false}}
+#### topic publish (binary)
+
+```ts
+[op: 0, id: number, ...cdr: bytes]
 ```
 
-```json
-{"op":"destroy","id":0}
+#### service request (binary)
+
+```ts
+[op: 1, id: number, call_id: number, ...cdr: bytes]
 ```
 
-Server -> Client:
+### Server -> Client
 
-```json
-{"id":0,"callId":0}
+#### create response
+
+```ts
+{
+  call_id: number;
+  id: number;
+}
 ```
 
-```json
-{"id":1,"callId":1}
+#### topic message (binary)
+
+```ts
+[op: 0, id: number, ...cdr: bytes]
 ```
 
-```json
-{"id":2,"callId":2}
+#### service response (binary)
+
+```ts
+[op: 2, call_id: number, ...cdr: bytes]
+```
+
+### QoS
+
+```ts
+type QosProfile = {
+  profile?:
+    | "sensor_data"
+    | "parameters"
+    | "default"
+    | "services_default"
+    | "parameter_events"
+    | "system_default"
+    | "best_available"; // if supported by target RMW
+  history?: "system_default" | "keep_last" | "keep_all";
+  depth?: number;
+  reliability?: "system_default" | "reliable" | "best_effort" | "best_available";
+  durability?: "system_default" | "transient_local" | "volatile" | "best_available";
+  deadline?: { sec: number; nsec: number } | "infinite";
+  lifespan?: { sec: number; nsec: number } | "infinite";
+  liveliness?: "system_default" | "automatic" | "manual_by_topic" | "best_available";
+  liveliness_lease_duration?: { sec: number; nsec: number } | "infinite";
+  avoid_ros_namespace_conventions?: boolean;
+};
 ```
 
 Notes:
 - `id` is assigned by server per WebSocket session, starting from `0`.
 - `id` namespace is shared by publishers, subscriptions, and service clients.
-- `callId` is client-defined and echoed back in create responses.
-- `create_publisher` / `create_subscription` / `create_service_client` must include `qos`.
-- `qos.profile` supports: `SENSOR_DATA`, `PARAMETERS`, `DEFAULT`, `SERVICES_DEFAULT`, `PARAMETER_EVENTS`, `SYSTEM_DEFAULT`, `BEST_AVAILABLE`.
-- `qos.profile` is optional (default base profile is `rmw_qos_profile_default`).
-- `history` / `reliability` / `durability` / `liveliness` are UPPER_SNAKE_CASE string enums.
-- QoS time fields (`deadline`, `lifespan`, `livelinessLeaseDuration`) use `{ "sec": ..., "nsec": ... }`.
+- `call_id` is client-defined and echoed in create responses and service responses.
+- `destroy` has no response.
 - Unknown/invalid control messages are ignored (no explicit error frame).
-
-### Binary frames (data)
-
-Client -> Server:
-- Topic publish: `[1][id:u32][cdr...]`
-- Service request: `[2][id:u32][call_id:u32][cdr...]`
-
-Server -> Client:
-- Topic message from subscription: `[1][id:u32][cdr...]`
-- Service response: `[3][id:u32][call_id:u32][cdr...]`
-
-Notes:
-- `id` must match the entity created by a text control frame.
-- `call_id` is client-defined correlation ID echoed back in service responses.
-- All `u32` values in binary frames are little-endian.
+- Text enum/time string values are case-sensitive and must be lowercase.
+- `u32` values in binary frames are copied in native-endian representation (little-endian on typical targets).
 
 ## License
 

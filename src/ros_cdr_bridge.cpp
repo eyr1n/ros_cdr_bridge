@@ -1,5 +1,7 @@
+#include <chrono>
 #include <cstring>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -21,6 +23,7 @@ RosCdrBridge::RosCdrBridge(rclcpp::Node *node) : node_{node} {
   server_.clear_error_channels(websocketpp::log::elevel::all);
 
   server_.init_asio();
+  server_.set_reuse_addr(true);
 
   server_.set_open_handler(
       std::bind(&RosCdrBridge::on_open, this, std::placeholders::_1));
@@ -32,17 +35,33 @@ RosCdrBridge::RosCdrBridge(rclcpp::Node *node) : node_{node} {
 }
 
 void RosCdrBridge::start(uint16_t port) {
-  server_.set_reuse_addr(true);
   server_.listen(port);
   server_.start_accept();
+  server_thread_ = std::thread([this]() { server_.run(); });
 }
 
 void RosCdrBridge::stop() {
-  server_.stop_listening();
-  server_.stop();
-}
+  websocketpp::lib::error_code ec;
+  server_.stop_listening(ec);
 
-void RosCdrBridge::run() { server_.run(); }
+  server_.get_io_service().post([this]() {
+    std::vector<websocketpp::server<websocketpp::config::asio>::connection_ptr>
+        connections;
+    for (auto &session : sessions_) {
+      websocketpp::lib::error_code ec;
+      if (auto con = server_.get_con_from_hdl(session.first, ec)) {
+        connections.push_back(std::move(con));
+      }
+    }
+    for (auto &con : connections) {
+      websocketpp::lib::error_code ec;
+      con->terminate(ec);
+    }
+  });
+
+  server_.stop_perpetual();
+  server_thread_.join();
+}
 
 void RosCdrBridge::on_open(websocketpp::connection_hdl hdl) {
   sessions_.emplace(hdl, Session{});
@@ -54,11 +73,9 @@ void RosCdrBridge::on_close(websocketpp::connection_hdl hdl) {
   if (it == sessions_.end()) {
     return;
   }
-  {
-    std::lock_guard lock{mutex_};
-    sessions_.erase(it);
-    node_->get_node_graph_interface()->notify_graph_change();
-  }
+  std::lock_guard node_lock{node_mutex_};
+  sessions_.erase(it);
+  node_->get_node_graph_interface()->notify_graph_change();
   RCLCPP_INFO(node_->get_logger(), "websocket client disconnected");
 }
 
@@ -73,58 +90,55 @@ void RosCdrBridge::on_message(
 
   switch (msg->get_opcode()) {
   case websocketpp::frame::opcode::text:
-    std::visit(overloads{
-                   [](std::monostate) {},
-                   [this, hdl, &session](CreatePublisherRequest &&request) {
-                     create_publisher(hdl, session, request.call_id,
-                                      request.name, request.type,
-                                      request.qos_profile);
-                   },
-                   [this, hdl, &session](CreateSubscriptionRequest &&request) {
-                     create_subscription(hdl, session, request.call_id,
-                                         request.name, request.type,
-                                         request.qos_profile);
-                   },
-                   [this, hdl, &session](CreateServiceClientRequest &&request) {
-                     create_service_client(hdl, session, request.call_id,
-                                           request.name, request.type,
-                                           request.qos_profile);
-                   },
-                   [this, &session](DestroyRequest &&request) {
-                     destroy_id(session, request.id);
-                   },
-               },
-               parse_text_payload(msg->get_payload()));
+    std::visit(
+        overloads{
+            [](std::monostate) {},
+            [this, hdl, &session](CreatePublisherRequest &&request) {
+              create_publisher(hdl, session, request.call_id, request.name,
+                               request.type, request.qos_profile);
+            },
+            [this, hdl, &session](CreateSubscriptionRequest &&request) {
+              create_subscription(hdl, session, request.call_id, request.name,
+                                  request.type, request.qos_profile);
+            },
+            [this, hdl, &session](CreateServiceClientRequest &&request) {
+              create_service_client(hdl, session, request.call_id, request.name,
+                                    request.type, request.qos_profile);
+            },
+            [this, &session](DestroyRequest &&request) {
+              destroy_id(session, request.id);
+            },
+        },
+        parse_text_payload(msg->get_payload()));
     break;
 
   case websocketpp::frame::opcode::binary: {
-    std::visit(overloads{
-                   [](std::monostate) {},
-                   [this, &session](PublisherMessage &&message) {
-                     auto it = session.entities.find(message.id);
-                     if (it == session.entities.end()) {
-                       return;
-                     }
-                     if (auto publisher =
-                             std::get_if<rclcpp::GenericPublisher::SharedPtr>(
-                                 &it->second)) {
-                       publish_message(*publisher, std::move(message.message));
-                     }
-                   },
-                   [this, hdl, &session](ServiceClientRequest &&request) {
-                     auto it = session.entities.find(request.id);
-                     if (it == session.entities.end()) {
-                       return;
-                     }
-                     if (auto client =
-                             std::get_if<std::shared_ptr<GenericClient>>(
-                                 &it->second)) {
-                       call_service(hdl, *client, request.id, request.call_id,
-                                    request.message);
-                     }
-                   },
-               },
-               parse_binary_payload(msg->get_payload()));
+    std::visit(
+        overloads{
+            [](std::monostate) {},
+            [this, &session](PublisherMessage &&message) {
+              auto it = session.entities.find(message.id);
+              if (it == session.entities.end()) {
+                return;
+              }
+              if (auto publisher =
+                      std::get_if<rclcpp::GenericPublisher::SharedPtr>(
+                          &it->second)) {
+                publish_message(*publisher, std::move(message.message));
+              }
+            },
+            [this, hdl, &session](ServiceClientRequest &&request) {
+              auto it = session.entities.find(request.id);
+              if (it == session.entities.end()) {
+                return;
+              }
+              if (auto client = std::get_if<std::shared_ptr<GenericClient>>(
+                      &it->second)) {
+                call_service(hdl, *client, request.call_id, request.message);
+              }
+            },
+        },
+        parse_binary_payload(msg->get_payload()));
     break;
   }
 
@@ -141,7 +155,7 @@ void RosCdrBridge::create_publisher(websocketpp::connection_hdl hdl,
   uint32_t id = session.next_id++;
   rclcpp::GenericPublisher::SharedPtr publisher;
   {
-    std::lock_guard lock{mutex_};
+    std::lock_guard lock{node_mutex_};
     rclcpp::PublisherOptions options;
     options.callback_group = callback_group_;
     publisher = node_->create_generic_publisher(
@@ -153,8 +167,8 @@ void RosCdrBridge::create_publisher(websocketpp::connection_hdl hdl,
 
   session.entities.emplace(id, publisher);
   nlohmann::json response;
+  response["call_id"] = call_id;
   response["id"] = id;
-  response["callId"] = call_id;
   send_text_payload(hdl, response.dump());
   RCLCPP_INFO(node_->get_logger(), "create_publisher id=%u name=%s type=%s", id,
               name.c_str(), type.c_str());
@@ -168,7 +182,7 @@ void RosCdrBridge::create_subscription(websocketpp::connection_hdl hdl,
   uint32_t id = session.next_id++;
   rclcpp::GenericSubscription::SharedPtr subscription;
   {
-    std::lock_guard lock{mutex_};
+    std::lock_guard lock{node_mutex_};
     rclcpp::SubscriptionOptions options;
     options.callback_group = callback_group_;
     subscription = node_->create_generic_subscription(
@@ -189,8 +203,8 @@ void RosCdrBridge::create_subscription(websocketpp::connection_hdl hdl,
 
   session.entities.emplace(id, subscription);
   nlohmann::json response;
+  response["call_id"] = call_id;
   response["id"] = id;
-  response["callId"] = call_id;
   send_text_payload(hdl, response.dump());
   RCLCPP_INFO(node_->get_logger(), "create_subscription id=%u name=%s type=%s",
               id, name.c_str(), type.c_str());
@@ -204,7 +218,7 @@ void RosCdrBridge::create_service_client(websocketpp::connection_hdl hdl,
   uint32_t id = session.next_id++;
   std::shared_ptr<GenericClient> client;
   {
-    std::lock_guard lock{mutex_};
+    std::lock_guard lock{node_mutex_};
     auto options = rcl_client_get_default_options();
     options.qos = qos_profile;
     client = std::make_shared<GenericClient>(
@@ -215,8 +229,8 @@ void RosCdrBridge::create_service_client(websocketpp::connection_hdl hdl,
 
   session.entities.emplace(id, client);
   nlohmann::json response;
+  response["call_id"] = call_id;
   response["id"] = id;
-  response["callId"] = call_id;
   send_text_payload(hdl, response.dump());
   RCLCPP_INFO(node_->get_logger(),
               "create_service_client id=%u name=%s type=%s", id, name.c_str(),
@@ -229,7 +243,7 @@ void RosCdrBridge::destroy_id(Session &session, uint32_t id) {
     return;
   }
   {
-    std::lock_guard lock{mutex_};
+    std::lock_guard lock{node_mutex_};
     session.entities.erase(it);
     node_->get_node_graph_interface()->notify_graph_change();
   }
@@ -239,24 +253,23 @@ void RosCdrBridge::destroy_id(Session &session, uint32_t id) {
 void RosCdrBridge::publish_message(
     const rclcpp::GenericPublisher::SharedPtr pub,
     rclcpp::SerializedMessage &&message) {
-  std::shared_lock lock{mutex_};
+  std::shared_lock lock{node_mutex_};
   pub->publish(std::move(message));
 }
 
 void RosCdrBridge::call_service(websocketpp::connection_hdl hdl,
                                 const std::shared_ptr<GenericClient> client,
-                                uint32_t id, uint32_t call_id,
+                                uint32_t call_id,
                                 const rclcpp::SerializedMessage &message) {
-  std::shared_lock lock{mutex_};
-  client->async_send_request(message, [this, hdl, id, call_id](
-                                          const uint8_t *data, size_t size) {
-    std::vector<uint8_t> payload(1 + sizeof(id) + sizeof(call_id) + size);
-    payload[0] = OP_SERVICE_RESPONSE;
-    std::memcpy(payload.data() + 1, &id, sizeof(id));
-    std::memcpy(payload.data() + 1 + sizeof(id), &call_id, sizeof(call_id));
-    std::memcpy(payload.data() + 1 + sizeof(id) + sizeof(call_id), data, size);
-    send_binary_payload(hdl, std::move(payload));
-  });
+  std::shared_lock lock{node_mutex_};
+  client->async_send_request(
+      message, [this, hdl, call_id](const uint8_t *data, size_t size) {
+        std::vector<uint8_t> payload(1 + sizeof(call_id) + size);
+        payload[0] = OP_SERVICE_RESPONSE;
+        std::memcpy(payload.data() + 1, &call_id, sizeof(call_id));
+        std::memcpy(payload.data() + 1 + sizeof(call_id), data, size);
+        send_binary_payload(hdl, std::move(payload));
+      });
 }
 
 void RosCdrBridge::send_text_payload(websocketpp::connection_hdl hdl,

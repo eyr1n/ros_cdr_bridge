@@ -4,6 +4,7 @@
 #include <memory>
 #include <shared_mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -25,7 +26,6 @@ public:
 
   void start(uint16_t port);
   void stop();
-  void run();
 
 private:
   struct Session {
@@ -60,7 +60,7 @@ private:
   void publish_message(const rclcpp::GenericPublisher::SharedPtr pub,
                        rclcpp::SerializedMessage &&message);
   void call_service(websocketpp::connection_hdl hdl,
-                    const std::shared_ptr<GenericClient> client, uint32_t id,
+                    const std::shared_ptr<GenericClient> client,
                     uint32_t call_id, const rclcpp::SerializedMessage &message);
 
   void send_text_payload(websocketpp::connection_hdl hdl,
@@ -68,11 +68,12 @@ private:
   void send_binary_payload(websocketpp::connection_hdl hdl,
                            std::vector<uint8_t> &&payload);
 
-  std::shared_mutex mutex_;
+  std::shared_mutex node_mutex_;
   rclcpp::Node *node_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
 
   websocketpp::server<websocketpp::config::asio> server_;
+  std::thread server_thread_;
   std::map<websocketpp::connection_hdl, Session,
            std::owner_less<websocketpp::connection_hdl>>
       sessions_;
