@@ -133,7 +133,7 @@ Notes:
 - `destroy` has no response.
 - Unknown/invalid control messages are ignored (no explicit error frame).
 - Text enum/time string values are case-sensitive and must be lowercase.
-- `u32` values in binary frames are copied in native-endian representation (little-endian on typical targets).
+- `u32` values in binary frames are little-endian.
 
 ## License
 
