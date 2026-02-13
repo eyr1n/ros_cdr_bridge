@@ -43,11 +43,14 @@ private:
              websocketpp::server<websocketpp::config::asio>::message_ptr msg);
 
   void create_publisher(websocketpp::connection_hdl hdl, Session &session,
-                        const std::string &name, const std::string &type);
+                        uint32_t call_id, const std::string &name,
+                        const std::string &type);
   void create_subscription(websocketpp::connection_hdl hdl, Session &session,
-                           const std::string &name, const std::string &type);
+                           uint32_t call_id, const std::string &name,
+                           const std::string &type);
   void create_service_client(websocketpp::connection_hdl hdl, Session &session,
-                             const std::string &name, const std::string &type);
+                             uint32_t call_id, const std::string &name,
+                             const std::string &type);
   void destroy_id(Session &session, uint32_t id);
 
   void publish_message(const rclcpp::GenericPublisher::SharedPtr pub,

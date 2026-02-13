@@ -17,16 +17,19 @@ inline constexpr std::string_view OP_CREATE_SERVICE_CLIENT =
 inline constexpr std::string_view OP_DESTROY = "destroy";
 
 struct CreatePublisherRequest {
+  uint32_t call_id;
   std::string name;
   std::string type;
 };
 
 struct CreateSubscriptionRequest {
+  uint32_t call_id;
   std::string name;
   std::string type;
 };
 
 struct CreateServiceClientRequest {
+  uint32_t call_id;
   std::string name;
   std::string type;
 };
@@ -43,15 +46,18 @@ parse_text_payload(const std::string &payload) {
     nlohmann::json root = nlohmann::json::parse(payload);
     std::string op = root.at("op").get<std::string>();
     if (op == OP_CREATE_PUBLISHER) {
-      return CreatePublisherRequest{root.at("name").get<std::string>(),
+      return CreatePublisherRequest{root.at("callId").get<uint32_t>(),
+                                    root.at("name").get<std::string>(),
                                     root.at("type").get<std::string>()};
     }
     if (op == OP_CREATE_SUBSCRIPTION) {
-      return CreateSubscriptionRequest{root.at("name").get<std::string>(),
+      return CreateSubscriptionRequest{root.at("callId").get<uint32_t>(),
+                                       root.at("name").get<std::string>(),
                                        root.at("type").get<std::string>()};
     }
     if (op == OP_CREATE_SERVICE_CLIENT) {
-      return CreateServiceClientRequest{root.at("name").get<std::string>(),
+      return CreateServiceClientRequest{root.at("callId").get<uint32_t>(),
+                                        root.at("name").get<std::string>(),
                                         root.at("type").get<std::string>()};
     }
     if (op == OP_DESTROY) {

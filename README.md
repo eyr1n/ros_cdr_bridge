@@ -26,15 +26,15 @@ Parameters:
 Client -> Server:
 
 ```json
-{"op":"create_subscription","name":"/chatter","type":"std_msgs/msg/String"}
+{"callId":0,"op":"create_subscription","name":"/chatter","type":"std_msgs/msg/String"}
 ```
 
 ```json
-{"op":"create_publisher","name":"/chatter","type":"std_msgs/msg/String"}
+{"callId":1,"op":"create_publisher","name":"/chatter","type":"std_msgs/msg/String"}
 ```
 
 ```json
-{"op":"create_service_client","name":"/add_two_ints","type":"example_interfaces/srv/AddTwoInts"}
+{"callId":2,"op":"create_service_client","name":"/add_two_ints","type":"example_interfaces/srv/AddTwoInts"}
 ```
 
 ```json
@@ -44,20 +44,21 @@ Client -> Server:
 Server -> Client:
 
 ```json
-{"op":"create_subscription","name":"/chatter","id":0}
+{"id":0,"callId":0}
 ```
 
 ```json
-{"op":"create_publisher","name":"/chatter","id":1}
+{"id":1,"callId":1}
 ```
 
 ```json
-{"op":"create_service_client","name":"/add_two_ints","id":2}
+{"id":2,"callId":2}
 ```
 
 Notes:
 - `id` is assigned by server per WebSocket session, starting from `0`.
 - `id` namespace is shared by publishers, subscriptions, and service clients.
+- `callId` is client-defined and echoed back in create responses.
 - Unknown/invalid control messages are ignored (no explicit error frame).
 
 ### Binary frames (data)
@@ -73,6 +74,7 @@ Server -> Client:
 Notes:
 - `id` must match the entity created by a text control frame.
 - `call_id` is client-defined correlation ID echoed back in service responses.
+- All `u32` values in binary frames are little-endian.
 
 ## License
 

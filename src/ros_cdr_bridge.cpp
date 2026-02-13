@@ -73,23 +73,25 @@ void RosCdrBridge::on_message(
 
   switch (msg->get_opcode()) {
   case websocketpp::frame::opcode::text:
-    std::visit(
-        overloads{
-            [](std::monostate) {},
-            [this, hdl, &session](CreatePublisherRequest &&request) {
-              create_publisher(hdl, session, request.name, request.type);
-            },
-            [this, hdl, &session](CreateSubscriptionRequest &&request) {
-              create_subscription(hdl, session, request.name, request.type);
-            },
-            [this, hdl, &session](CreateServiceClientRequest &&request) {
-              create_service_client(hdl, session, request.name, request.type);
-            },
-            [this, &session](DestroyRequest &&request) {
-              destroy_id(session, request.id);
-            },
-        },
-        parse_text_payload(msg->get_payload()));
+    std::visit(overloads{
+                   [](std::monostate) {},
+                   [this, hdl, &session](CreatePublisherRequest &&request) {
+                     create_publisher(hdl, session, request.call_id,
+                                      request.name, request.type);
+                   },
+                   [this, hdl, &session](CreateSubscriptionRequest &&request) {
+                     create_subscription(hdl, session, request.call_id,
+                                         request.name, request.type);
+                   },
+                   [this, hdl, &session](CreateServiceClientRequest &&request) {
+                     create_service_client(hdl, session, request.call_id,
+                                           request.name, request.type);
+                   },
+                   [this, &session](DestroyRequest &&request) {
+                     destroy_id(session, request.id);
+                   },
+               },
+               parse_text_payload(msg->get_payload()));
     break;
 
   case websocketpp::frame::opcode::binary: {
@@ -129,7 +131,8 @@ void RosCdrBridge::on_message(
 }
 
 void RosCdrBridge::create_publisher(websocketpp::connection_hdl hdl,
-                                    Session &session, const std::string &name,
+                                    Session &session, uint32_t call_id,
+                                    const std::string &name,
                                     const std::string &type) {
   uint32_t id = session.next_id++;
   rclcpp::GenericPublisher::SharedPtr publisher;
@@ -144,16 +147,15 @@ void RosCdrBridge::create_publisher(websocketpp::connection_hdl hdl,
 
   session.entities.emplace(id, publisher);
   nlohmann::json response;
-  response["op"] = OP_CREATE_PUBLISHER;
-  response["name"] = name;
   response["id"] = id;
+  response["callId"] = call_id;
   send_text_payload(hdl, response.dump());
   RCLCPP_INFO(node_->get_logger(), "create_publisher id=%u name=%s type=%s", id,
               name.c_str(), type.c_str());
 }
 
 void RosCdrBridge::create_subscription(websocketpp::connection_hdl hdl,
-                                       Session &session,
+                                       Session &session, uint32_t call_id,
                                        const std::string &name,
                                        const std::string &type) {
   uint32_t id = session.next_id++;
@@ -179,16 +181,15 @@ void RosCdrBridge::create_subscription(websocketpp::connection_hdl hdl,
 
   session.entities.emplace(id, subscription);
   nlohmann::json response;
-  response["op"] = OP_CREATE_SUBSCRIPTION;
-  response["name"] = name;
   response["id"] = id;
+  response["callId"] = call_id;
   send_text_payload(hdl, response.dump());
   RCLCPP_INFO(node_->get_logger(), "create_subscription id=%u name=%s type=%s",
               id, name.c_str(), type.c_str());
 }
 
 void RosCdrBridge::create_service_client(websocketpp::connection_hdl hdl,
-                                         Session &session,
+                                         Session &session, uint32_t call_id,
                                          const std::string &name,
                                          const std::string &type) {
   uint32_t id = session.next_id++;
@@ -204,9 +205,8 @@ void RosCdrBridge::create_service_client(websocketpp::connection_hdl hdl,
 
   session.entities.emplace(id, client);
   nlohmann::json response;
-  response["op"] = OP_CREATE_SERVICE_CLIENT;
-  response["name"] = name;
   response["id"] = id;
+  response["callId"] = call_id;
   send_text_payload(hdl, response.dump());
   RCLCPP_INFO(node_->get_logger(),
               "create_service_client id=%u name=%s type=%s", id, name.c_str(),
