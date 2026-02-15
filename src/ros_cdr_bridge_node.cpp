@@ -6,7 +6,7 @@ namespace ros_cdr_bridge {
 
 RosCdrBridgeNode::RosCdrBridgeNode(const rclcpp::NodeOptions &options)
     : Node{"ros_cdr_bridge", options}, bridge_{this} {
-  declare_parameter<int>("port", 9090);
+  declare_parameter<int>("port", 54321);
 
   int port = get_parameter("port").as_int();
   bridge_.start(port);

@@ -16,7 +16,7 @@ ros2 run ros_cdr_bridge ros_cdr_bridge_node
 ```
 
 Parameters:
-- `port` (default: `9090`)
+- `port` (default: `54321`)
 
 ## Protocol
 
